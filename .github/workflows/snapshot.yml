@@ -9,8 +9,21 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-      - name: Install dependencies
-        run: pip install requests
+      - name: Install dependencies- name: Diagnostics — list workspace
+        run: |
+          echo "=== PWD ==="
+          pwd
+          echo "=== ls (root) ==="
+          ls -la
+          echo "=== ls (repo) ==="
+          ls -la $GITHUB_WORKSPACE || true
+          echo "=== ls scripts ==="
+          ls -la scripts || true
+          echo "=== find tree (top 3) ==="
+          find . -maxdepth 3 -type f -print | sed -n '1,200p'
+          echo "=== python info ==="
+          python3 --version || python --version || true
+        run: pip install requests 
       - name: Run Snapshotter
         env:
           DRY_RUN: "true"
