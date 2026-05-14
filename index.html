@@ -476,7 +476,7 @@ button:focus-visible, .tab:focus-visible, input:focus-visible { outline: 2px sol
  *  modal handler corruption, mult coloring, schema validation, etc.
  *  Features: auto-refresh, theme toggle, toasts, undo, sortable table,
  *  notifications, settings panel, keyboard shortcuts.
- *  Note: moonwell-artemis → moonwell CoinGecko ID (preserved from v2)
+ *  Note: WELL uses CoinGecko ID "moonwell-artemis" (not "moonwell")
  * ═══════════════════════════════════════════════════════════════════ */
 
 /* ───────── Config ───────── */
@@ -517,9 +517,9 @@ const DEFAULT_POSITIONS = [
   // LYX: 1,200 coins × $0.234 = ~$280 (staked on Universal Profile)
   //      Cost basis: 1200 × $0.79 = $948 → unrealized loss ~$668
   { id:"lukso-token",          symbol:"LYX",   book:"legacy", qty:1200,      avgCost:0.79,    target:0,    wallet:"Universal Profile", status:"staked" },
-  // WELL: 100,476 coins × $0.0000115 = ~$1.15
-  //       Cost basis: 100476 × $0.03673 = $3,690 → unrealized loss ~$3,689
-  { id:"moonwell",             symbol:"WELL",  book:"legacy", qty:100476,    avgCost:0.03673, target:0,    wallet:"Coinbase",          status:"frozen" },
+  // WELL: 100,476 coins × $0.004987 = ~$501.07
+  //       Cost basis: 100476 × $0.03673 = $3,690 → unrealized loss ~$3,189
+  { id:"moonwell-artemis",      symbol:"WELL",  book:"legacy", qty:100476,    avgCost:0.03673, target:0,    wallet:"Coinbase",          status:"frozen" },
   // ENS: 11.1912 coins × $6.87 = ~$76.88
   { id:"ethereum-name-service",symbol:"ENS",   book:"legacy", qty:11.1912,   avgCost:0,       target:0,    wallet:"Coinbase",          status:"frozen" },
   // TRUMP: 9.8398 coins × $2.35 = ~$23.12
@@ -680,7 +680,7 @@ async function fetchPrices(force = false) {
         "bitcoin":{usd:79700,usd_24h_change:-1.6},"ethereum":{usd:2264,usd_24h_change:-1.6},
         "solana":{usd:90.79,usd_24h_change:-4.7},"ondo-finance":{usd:0.383,usd_24h_change:-4.0},
         "hedera-hashgraph":{usd:0.0928,usd_24h_change:-1.8},"reserve-rights-token":{usd:0.00190,usd_24h_change:-5.0},
-        "lukso-token":{usd:0.234,usd_24h_change:0.3},"moonwell":{usd:0.0000115,usd_24h_change:0.0},
+        "lukso-token":{usd:0.234,usd_24h_change:0.3},"moonwell-artemis":{usd:0.004987,usd_24h_change:0.0},
         "official-trump":{usd:2.35,usd_24h_change:-5.3},"usd-coin":{usd:1.00,usd_24h_change:0.0},"ethereum-name-service":{usd:6.87,usd_24h_change:-3.5}
       };
       sysBanner("⚠️ Using demo prices — CoinGecko unreachable (CORS or rate-limit). Host on GitHub Pages/Netlify, or wait a minute.", "yellow");
