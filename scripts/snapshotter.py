@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 """
-Minimal safe snapshotter stub for dry-run testing.
+Safe snapshotter stub for CI dry-run.
 
-This does NOT call external APIs. It simulates a snapshot so you can test
-the CI / DRY_RUN flow and produce the required artifacts.
-Replace with the full snapshotter when ready.
+Creates out/snapshots/positions.latest.json and an archive file.
+Designed to always succeed in DRY_RUN mode and produce inspectable artifacts.
 """
 import os
 import json
-import time
+import random
 from datetime import datetime
 from pathlib import Path
-import random
 
 OUT_DIR = Path("out/snapshots")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -20,7 +18,6 @@ def now_iso():
     return datetime.utcnow().isoformat() + "Z"
 
 def make_dummy_positions():
-    # deterministic-ish ordering by symbol
     symbols = ["BTC", "ETH", "SOL", "HBAR", "LYX", "RSR", "WELL"]
     positions = []
     total = 0.0
@@ -31,54 +28,34 @@ def make_dummy_positions():
         total += nav
         positions.append({
             "symbol": s,
-            "id": s.lower(),
             "qty": qty,
             "price_usd": price,
             "nav_usd": nav,
-            "dirty": False,
-            "wallet_address": None,
             "location": "sim"
         })
-    # compute weights
     for p in positions:
         p["weight"] = round(p["nav_usd"] / total, 12) if total else 0.0
     return positions, total
 
-def run_snapshot():
-    rid = f"snap_{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}"
-    positions, total_nav = make_dummy_positions()
-    # small simulated coingecko metrics
-    price_sources = {
-        "coingecko": {
-            "call_count": 10,
-            "ms_per_call_avg": 150
-        }
-    }
+def main():
+    print("Starting safe snapshotter stub.")
+    positions, total = make_dummy_positions()
     snapshot = {
-        "run_id": rid,
+        "run_id": f"dryrun-{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}",
         "generated_at": now_iso(),
-        "total_nav_usd": round(total_nav, 6),
+        "total_nav_usd": round(total, 6),
         "positions": positions,
-        "price_sources": price_sources,
-        "metadata": {
-            "missing_prices": 0,
-            "notes": "simulated dry-run snapshot"
-        }
+        "metadata": {"notes": "safe dry-run snapshot"}
     }
-    latest_path = OUT_DIR / "positions.latest.json"
-    archive_path = OUT_DIR / f"{rid}.json"
-    with open(latest_path, "w") as f:
+    latest = OUT_DIR / "positions.latest.json"
+    archive = OUT_DIR / f"{snapshot['run_id']}.json"
+    with open(latest, "w") as f:
         json.dump(snapshot, f, indent=2)
-    with open(archive_path, "w") as f:
+    with open(archive, "w") as f:
         json.dump(snapshot, f, indent=2)
-    print(f"[DRY_RUN] Would commit {latest_path} (dry-run={os.environ.get('DRY_RUN')})")
-    print(f"Snapshot written: {latest_path} (archive: {archive_path})")
-    return snapshot
-
-if __name__ == "__main__":
-    print("Starting minimal dry-run snapshotter (simulated).")
-    snap = run_snapshot()
-    print("Total NAV:", snap["total_nav_usd"])
-    print("Positions:", len(snap["positions"]))
-    print("Price sources:", snap["price_sources"])
+    print(f"Written: {latest}")
+    print(f"Archive: {archive}")
     print("Done.")
+
+if __name__ == '__main__':
+    main()
