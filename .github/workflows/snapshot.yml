@@ -1,33 +1,54 @@
 name: Portfolio Snapshot Dry-Run
 on: push
+
 jobs:
   run-snapshot:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-      - name: Install dependencies- name: Diagnostics — list workspace
+
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install requests || true
+
+      - name: Diagnostics — list workspace
         run: |
           echo "=== PWD ==="
           pwd
           echo "=== ls (root) ==="
           ls -la
-          echo "=== ls (repo) ==="
-          ls -la $GITHUB_WORKSPACE || true
+          echo "=== ls (GITHUB_WORKSPACE) ==="
+          ls -la "$GITHUB_WORKSPACE" || true
           echo "=== ls scripts ==="
           ls -la scripts || true
           echo "=== find tree (top 3) ==="
           find . -maxdepth 3 -type f -print | sed -n '1,200p'
           echo "=== python info ==="
           python3 --version || python --version || true
-        run: pip install requests 
-      - name: Run Snapshotter
+
+      - name: Run Snapshotter (dry-run)
         env:
           DRY_RUN: "true"
           WALLET_ADDRESSES: ""
-          REPO_OWNER: ${{ github.repository_owner }}
-          REPO_NAME: ${{ github.event.repository.name }}
-        run: python scripts/snapshotter.py
+        run: |
+          # run the snapshotter; output is tee'd to a log for artifact upload
+          python3 scripts/snapshotter.py 2>&1 | tee snapshot_run.log || true
+
+      - name: Upload run log
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot_run_log
+          path: snapshot_run.log
+
+      - name: Upload snapshots (if any)
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots
+          path: out/snapshots/*
