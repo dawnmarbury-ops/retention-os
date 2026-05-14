@@ -24,3 +24,4 @@ def get_positions():
             "location": "Ledger (Cold Storage)"
         }
     ]
+ 
