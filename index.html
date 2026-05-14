@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
-<meta name="description" content="Retention OS v2.3 COMPLETE PORTFOLIO — Pre-loaded with ALL user positions (11 tokens, actual quantities and cost bases).">
+<meta name="description" content="Retention OS v2.3 — Portfolio operating system with live prices, rule alerts, history, and rebalancing.">
 <meta name="theme-color" content="#0a0a0f">
-<title>Retention OS v2.3 COMPLETE PORTFOLIO</title>
+<title>Retention OS v2.3</title>
 <style>
 /* ========== THEME TOKENS ========== */
 :root[data-theme="dark"] {
@@ -202,8 +202,8 @@ button:focus-visible, .tab:focus-visible, input:focus-visible { outline: 2px sol
 
 <div class="header-row">
   <div>
-    <h1>⚡ Retention OS <span style="font-size:0.8rem;color:var(--green);">v2.3 COMPLETE</span></h1>
-    <p class="subtitle">Portfolio operating system — 11 tokens pre-loaded · live prices · rule alerts · history · rebalancing</p>
+    <h1>⚡ Retention OS <span style="font-size:0.8rem;color:var(--text-ghost);">v2.3</span></h1>
+    <p class="subtitle">Portfolio operating system — live prices · rule alerts · history · rebalancing</p>
   </div>
   <div class="header-actions">
     <span id="updateStamp" class="update-stamp"><span class="dot"></span><span id="updateStampText">never</span></span>
@@ -451,27 +451,7 @@ button:focus-visible, .tab:focus-visible, input:focus-visible { outline: 2px sol
 "use strict";
 
 /* ═══════════════════════════════════════════════════════════════════
- * Retention OS v2.3 COMPLETE PORTFOLIO — Pre-loaded with ALL user holdings
- *
- * ╔══════════════════════════════════════════════════════════════════════╗
- * ║  THIS FILE HAS YOUR COMPLETE PORTFOLIO PRE-LOADED AS DEFAULTS!     ║
- * ║                                                                    ║
- * ║  11 tokens total:                                                  ║
- * ║  NEW BOOK:  BTC, ETH, SOL (1), ONDO                               ║
- * ║  LEGACY:    HBAR (40201), RSR (1110470), LYX (1200),               ║
- * ║             WELL (100476), ENS (11.1912), TRUMP (9.8398),          ║
- * ║             USDC (30.15)                                           ║
- * ║                                                                    ║
- * ║  Estimated total value: ~$6,348 (as of May 14, 2026)              ║
- * ║  Largest positions: HBAR (~59%), RSR (~33%), LYX (~4%)             ║
- * ║                                                                    ║
- * ║  Average costs are pre-filled where known:                         ║
- * ║    HBAR: $0.25, RSR: $0.001, LYX: $0.79, WELL: $0.03673          ║
- * ║                                                                    ║
- * ║  NOTE: If you already have positions in localStorage, those will   ║
- * ║  take priority over these defaults. These defaults only apply      ║
- * ║  when localStorage is empty (first load or after clearing data).   ║
- * ╚══════════════════════════════════════════════════════════════════════╝
+ * Retention OS v2.3 — Improved release
  *  Bug fixes: switchTab, alert overwrite, chart DPR, XSS, date math,
  *  modal handler corruption, mult coloring, schema validation, etc.
  *  Features: auto-refresh, theme toggle, toasts, undo, sortable table,
@@ -490,42 +470,15 @@ const STORAGE_KEYS = {
   theme:     "ros_theme",
 };
 
-/* ╔══════════════════════════════════════════════════════════════════════════╗
- * ║  ⚡ COMPLETE PORTFOLIO — All 11 tokens with ACTUAL quantities & costs  ║
- * ║                                                                        ║
- * ║  These defaults match the user's Mini Position Editor screenshot.       ║
- * ║  localStorage data (if any) will OVERRIDE these on load.               ║
- * ╚══════════════════════════════════════════════════════════════════════════╝ */
 const DEFAULT_POSITIONS = [
-  // ─── NEW BOOK (active DCA targets) ───
-  // BTC: qty 0, target 25% — accumulation phase, no coins yet
-  { id:"bitcoin",              symbol:"BTC",   book:"new",    qty:0,         avgCost:0,       target:0.25, wallet:"Ledger Stax",       status:"active" },
-  // ETH: qty 0, target 20% — accumulation phase, no coins yet
-  { id:"ethereum",             symbol:"ETH",   book:"new",    qty:0,         avgCost:0,       target:0.20, wallet:"Ledger Stax",       status:"active" },
-  // SOL: qty 1, target 35% — ~$90.79 value
-  { id:"solana",               symbol:"SOL",   book:"new",    qty:1,         avgCost:0,       target:0.35, wallet:"Phantom",           status:"active" },
-  // ONDO: qty 0, target 20% — accumulation phase
-  { id:"ondo-finance",         symbol:"ONDO",  book:"new",    qty:0,         avgCost:0,       target:0.20, wallet:"Phantom",           status:"active" },
-
-  // ─── LEGACY BOOK (held, not actively buying) ───
-  // HBAR: 40,201 coins × $0.093 = ~$3,731 (LARGEST position, ~59% of portfolio)
-  //       Cost basis: 40201 × $0.25 = $10,050 → unrealized loss ~$6,319
-  { id:"hedera-hashgraph",     symbol:"HBAR",  book:"legacy", qty:40201,     avgCost:0.25,    target:0,    wallet:"Coinbase",          status:"frozen" },
-  // RSR: 1,110,470 coins × $0.0019 = ~$2,114 (2nd largest, ~33%)
-  //      Cost basis: 1110470 × $0.001 = $1,110 → unrealized gain ~$1,004
-  { id:"reserve-rights-token", symbol:"RSR",   book:"legacy", qty:1110470,   avgCost:0.001,   target:0,    wallet:"Coinbase",          status:"frozen" },
-  // LYX: 1,200 coins × $0.234 = ~$280 (staked on Universal Profile)
-  //      Cost basis: 1200 × $0.79 = $948 → unrealized loss ~$668
-  { id:"lukso-token",          symbol:"LYX",   book:"legacy", qty:1200,      avgCost:0.79,    target:0,    wallet:"Universal Profile", status:"staked" },
-  // WELL: 100,476 coins × $0.0000115 = ~$1.15
-  //       Cost basis: 100476 × $0.03673 = $3,690 → unrealized loss ~$3,689
-  { id:"moonwell",             symbol:"WELL",  book:"legacy", qty:100476,    avgCost:0.03673, target:0,    wallet:"Coinbase",          status:"frozen" },
-  // ENS: 11.1912 coins × $6.87 = ~$76.88
-  { id:"ethereum-name-service",symbol:"ENS",   book:"legacy", qty:11.1912,   avgCost:0,       target:0,    wallet:"Coinbase",          status:"frozen" },
-  // TRUMP: 9.8398 coins × $2.35 = ~$23.12
-  { id:"official-trump",       symbol:"TRUMP", book:"legacy", qty:9.8398,    avgCost:0,       target:0,    wallet:"Coinbase",          status:"frozen" },
-  // USDC: 30.15 coins × $1.00 = ~$30.15 (stablecoin)
-  { id:"usd-coin",             symbol:"USDC",  book:"legacy", qty:30.15,     avgCost:0,       target:0,    wallet:"Coinbase",          status:"frozen" },
+  { id:"bitcoin",              symbol:"BTC",  book:"new",    qty:0,    avgCost:0, target:0.25, wallet:"Ledger Stax",       status:"active" },
+  { id:"ethereum",             symbol:"ETH",  book:"new",    qty:0,    avgCost:0, target:0.20, wallet:"Ledger Stax",       status:"active" },
+  { id:"solana",               symbol:"SOL",  book:"new",    qty:0,    avgCost:0, target:0.35, wallet:"Phantom",           status:"active" },
+  { id:"ondo-finance",         symbol:"ONDO", book:"new",    qty:0,    avgCost:0, target:0.20, wallet:"Phantom",           status:"active" },
+  { id:"hedera-hashgraph",     symbol:"HBAR", book:"legacy", qty:0,    avgCost:0, target:0,    wallet:"Coinbase",          status:"frozen" },
+  { id:"reserve-rights-token", symbol:"RSR",  book:"legacy", qty:0,    avgCost:0, target:0,    wallet:"Coinbase",          status:"frozen" },
+  { id:"lukso-token",          symbol:"LYX",  book:"legacy", qty:1200, avgCost:0, target:0,    wallet:"Universal Profile", status:"staked" },
+  { id:"moonwell",             symbol:"WELL", book:"legacy", qty:0,    avgCost:0, target:0,    wallet:"Coinbase",          status:"frozen" },
 ];
 
 const DEFAULT_SETTINGS = {
@@ -542,7 +495,7 @@ const DEFAULT_SETTINGS = {
   vultureTrim: 0.25,
 };
 
-const COLORS = { BTC:"#f7931a", ETH:"#627eea", SOL:"#9945ff", ONDO:"#00d4ff", HBAR:"#00b0b9", RSR:"#00a3ff", LYX:"#fe005b", WELL:"#00e676", TRUMP:"#c8102e", USDC:"#2775ca", ENS:"#5298ff" };
+const COLORS = { BTC:"#f7931a", ETH:"#627eea", SOL:"#9945ff", ONDO:"#00d4ff", HBAR:"#00b0b9", RSR:"#00a3ff", LYX:"#fe005b", WELL:"#00e676" };
 
 const COIN_GECKO_URL = "https://api.coingecko.com/api/v3/simple/price";
 const PRICE_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -675,13 +628,11 @@ async function fetchPrices(force = false) {
       setUpdateStamp("stale");
     } else {
       // No cache → use demo
-      // Demo/fallback prices as of May 14, 2026
       prices = {
-        "bitcoin":{usd:79700,usd_24h_change:-1.6},"ethereum":{usd:2264,usd_24h_change:-1.6},
-        "solana":{usd:90.79,usd_24h_change:-4.7},"ondo-finance":{usd:0.383,usd_24h_change:-4.0},
-        "hedera-hashgraph":{usd:0.0928,usd_24h_change:-1.8},"reserve-rights-token":{usd:0.00190,usd_24h_change:-5.0},
-        "lukso-token":{usd:0.234,usd_24h_change:0.3},"moonwell":{usd:0.0000115,usd_24h_change:0.0},
-        "official-trump":{usd:2.35,usd_24h_change:-5.3},"usd-coin":{usd:1.00,usd_24h_change:0.0},"ethereum-name-service":{usd:6.87,usd_24h_change:-3.5}
+        "bitcoin":{usd:103000,usd_24h_change:1.2},"ethereum":{usd:2500,usd_24h_change:-0.3},
+        "solana":{usd:165,usd_24h_change:2.1},"ondo-finance":{usd:1.10,usd_24h_change:-1.0},
+        "hedera-hashgraph":{usd:0.085,usd_24h_change:0.5},"reserve-rights-token":{usd:0.0065,usd_24h_change:-0.8},
+        "lukso-token":{usd:1.80,usd_24h_change:0.0},"moonwell":{usd:0.035,usd_24h_change:-2.5}
       };
       sysBanner("⚠️ Using demo prices — CoinGecko unreachable (CORS or rate-limit). Host on GitHub Pages/Netlify, or wait a minute.", "yellow");
       setUpdateStamp("error");
