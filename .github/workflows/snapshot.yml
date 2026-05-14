@@ -1,5 +1,5 @@
 name: Portfolio Snapshot Dry-Run
-on: [push]
+on: push
 jobs:
   run-snapshot:
     runs-on: ubuntu-latest
@@ -11,15 +11,10 @@ jobs:
           python-version: '3.9'
       - name: Install dependencies
         run: pip install requests
-      - name: Run Snapshotter (dry-run)
+      - name: Run Snapshotter
         env:
           DRY_RUN: "true"
           WALLET_ADDRESSES: ""
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 scripts/snapshotter.py 2>&1 | tee snapshot_run.log
-      - name: Upload snapshot_run.log (optional convenience)
-        uses: actions/upload-artifact@v4
-        with:
-          name: snapshot_run_log
-          path: snapshot_run.log
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: python scripts/snapshotter.py
