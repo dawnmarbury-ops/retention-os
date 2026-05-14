@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Retention OS — Data Checker</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #0d1117; color: #e6edf3; min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 24px 16px;
+  }
+  h1 { font-size: 28px; margin-bottom: 4px; text-align: center; }
+  h1 span { color: #ffc107; }
+  .subtitle { color: #8b949e; margin-bottom: 28px; text-align: center; font-size: 15px; }
+  .card {
+    background: #161b22; border: 1px solid #30363d; border-radius: 12px;
+    padding: 24px; width: 100%; max-width: 600px; margin-bottom: 20px;
+  }
+  .card h2 { font-size: 18px; margin-bottom: 16px; color: #58a6ff; }
+  .check-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 0; border-bottom: 1px solid #21262d;
+    font-size: 16px;
+  }
+  .check-row:last-child { border-bottom: none; }
+  .icon { font-size: 24px; flex-shrink: 0; width: 32px; text-align: center; }
+  .label { flex: 1; }
+  .detail { color: #8b949e; font-size: 13px; margin-top: 2px; }
+  .found { color: #3fb950; }
+  .missing { color: #f85149; }
+
+  .btn {
+    display: block; width: 100%; padding: 18px; font-size: 18px;
+    font-weight: 700; border: none; border-radius: 10px; cursor: pointer;
+    margin-bottom: 12px; transition: transform 0.1s, box-shadow 0.1s;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn-backup {
+    background: #238636; color: #fff;
+    box-shadow: 0 0 12px rgba(35,134,54,0.4);
+  }
+  .btn-backup:hover { background: #2ea043; }
+  .btn-restore {
+    background: #1f6feb; color: #fff;
+    box-shadow: 0 0 12px rgba(31,111,235,0.3);
+  }
+  .btn-restore:hover { background: #388bfd; }
+  .btn-secondary {
+    background: #30363d; color: #c9d1d9; font-size: 15px;
+    padding: 14px; font-weight: 600;
+  }
+  .btn-secondary:hover { background: #3a424b; }
+
+  .drop-zone {
+    border: 2px dashed #30363d; border-radius: 10px; padding: 28px;
+    text-align: center; color: #8b949e; cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    margin-bottom: 12px;
+  }
+  .drop-zone.over { border-color: #1f6feb; background: rgba(31,111,235,0.08); }
+  .drop-zone p { margin-bottom: 8px; font-size: 15px; }
+  .drop-zone small { font-size: 12px; }
+
+  .instructions {
+    background: #0d1117; border: 1px solid #30363d; border-radius: 10px;
+    padding: 20px; margin-top: 8px;
+  }
+  .instructions ol { padding-left: 20px; }
+  .instructions li { padding: 6px 0; color: #c9d1d9; font-size: 14px; line-height: 1.5; }
+  .instructions li strong { color: #ffc107; }
+
+  .status-msg {
+    padding: 14px; border-radius: 8px; margin: 12px 0;
+    font-size: 14px; display: none;
+  }
+  .status-msg.success { display: block; background: rgba(35,134,54,0.15); color: #3fb950; border: 1px solid #238636; }
+  .status-msg.error { display: block; background: rgba(248,81,73,0.15); color: #f85149; border: 1px solid #f85149; }
+  .status-msg.info { display: block; background: rgba(31,111,235,0.15); color: #58a6ff; border: 1px solid #1f6feb; }
+
+  .warning-box {
+    background: rgba(210,153,34,0.12); border: 1px solid #d29922;
+    border-radius: 8px; padding: 14px; margin-bottom: 16px;
+    color: #e3b341; font-size: 14px; line-height: 1.5;
+  }
+  .warning-box strong { color: #ffc107; }
+
+  .footer { color: #484f58; font-size: 12px; margin-top: 20px; text-align: center; }
+  input[type="file"] { display: none; }
+</style>
+</head>
+<body>
+
+<h1>⚡ <span>Retention OS</span> Data Checker</h1>
+<p class="subtitle">Check if your portfolio data is safe, back it up, or restore it</p>
+
+<!-- IMPORTANT NOTICE -->
+<div class="card">
+  <div class="warning-box">
+    <strong>⚠️ Important:</strong> This tool must be opened <u>from the same place</u> where you use Retention OS.
+    If you run Retention OS from a website (like GitHub Pages or Netlify), you need to place this file on that
+    same website. Opening it by double-clicking on your computer won't find your online data.<br><br>
+    If you run Retention OS by double-clicking the HTML file on your computer, then double-clicking this file will work fine.
+  </div>
+</div>
+
+<!-- DATA STATUS -->
+<div class="card" id="statusCard">
+  <h2>📊 Your Data Status</h2>
+  <div id="checkResults">
+    <p style="color:#8b949e;">Checking your data…</p>
+  </div>
+</div>
+
+<!-- BACKUP -->
+<div class="card">
+  <h2>💾 Back Up Your Data</h2>
+  <p style="color:#8b949e; margin-bottom:16px; font-size:14px;">
+    Save a copy of all your portfolio data to a file on your computer. You can use this to restore later.
+  </p>
+  <button class="btn btn-backup" id="backupBtn" onclick="backupData()">
+    ⬇️&nbsp; BACKUP MY DATA
+  </button>
+  <div id="backupStatus" class="status-msg"></div>
+</div>
+
+<!-- RESTORE -->
+<div class="card">
+  <h2>🔄 Restore Your Data</h2>
+  <p style="color:#8b949e; margin-bottom:16px; font-size:14px;">
+    If you lost your data or moved to a new browser, you can restore from a backup file.
+  </p>
+
+  <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+    <p>📁 Click here or drag your backup file</p>
+    <small>Select the .json file you downloaded earlier</small>
+  </div>
+  <input type="file" id="fileInput" accept=".json,application/json">
+
+  <button class="btn btn-secondary" id="pasteBtn" onclick="pasteRestore()">
+    📋&nbsp; Or Paste Backup Text
+  </button>
+
+  <div id="restoreStatus" class="status-msg"></div>
+</div>
+
+<!-- HOW TO USE -->
+<div class="card">
+  <h2>📖 How to Use This Tool</h2>
+  <div class="instructions">
+    <ol>
+      <li><strong>Check your data:</strong> When you open this page, it automatically shows if your positions, history, and settings are saved.</li>
+      <li><strong>Back up:</strong> Click the big green <strong>"BACKUP MY DATA"</strong> button. A file will download to your computer — keep it somewhere safe!</li>
+      <li><strong>Restore:</strong> If something went wrong, click the blue drop zone above and pick your backup file. Your data will be restored instantly.</li>
+      <li><strong>After restoring:</strong> Go back to Retention OS and refresh the page. Your portfolio will be back.</li>
+    </ol>
+  </div>
+</div>
+
+<p class="footer">Retention OS Data Checker • Works offline • No data leaves your browser</p>
+
+<script>
+/* ── localStorage keys used by Retention OS ── */
+const KEYS = {
+  positions:  "ros_positions",
+  history:    "ros_history",
+  contrib:    "ros_contrib",
+  settings:   "ros_settings",
+  prices:     "ros_prices_cache",
+  dismissed:  "ros_dismissed_alerts",
+  theme:      "ros_theme"
+};
+
+/* Also check legacy/debug key names that appear in some versions */
+const LEGACY_KEYS = {
+  contrib2:   "ros_totalContributed",
+  prices2:    "ros_priceCache"
+};
+
+/* ── On load: run the data check ── */
+document.addEventListener("DOMContentLoaded", runCheck);
+
+function runCheck() {
+  const container = document.getElementById("checkResults");
+  let html = "";
+
+  /* 1. Positions */
+  const posRaw = ls(KEYS.positions);
+  if (posRaw) {
+    try {
+      const pos = JSON.parse(posRaw);
+      const count = Array.isArray(pos) ? pos.length : 0;
+      const lines = [];
+      if (Array.isArray(pos)) {
+        pos.forEach(p => {
+          const sym = esc(p.symbol || p.id || "?");
+          const qty = p.qty != null ? p.qty : "?";
+          lines.push(sym + ": " + qty);
+        });
+      }
+      html += row("found", "✅", "Positions — Found",
+        count + " token" + (count !== 1 ? "s" : "") + " saved" +
+        (lines.length ? "<br>" + lines.join(" &nbsp;•&nbsp; ") : ""));
+    } catch {
+      html += row("missing", "⚠️", "Positions — Corrupted", "Data exists but can't be read");
+    }
+  } else {
+    html += row("missing", "❌", "Positions — Not Found",
+      "No saved positions. They may load from defaults when you open the app.");
+  }
+
+  /* 2. History (snapshots) */
+  const histRaw = ls(KEYS.history);
+  if (histRaw) {
+    try {
+      const hist = JSON.parse(histRaw);
+      const count = Array.isArray(hist) ? hist.length : 0;
+      let extra = count + " snapshot" + (count !== 1 ? "s" : "") + " logged";
+      if (count > 0 && hist[0].date) extra += " — first: " + esc(hist[0].date);
+      if (count > 1 && hist[count-1].date) extra += ", latest: " + esc(hist[count-1].date);
+      html += row("found", "✅", "History — Found", extra);
+    } catch {
+      html += row("missing", "⚠️", "History — Corrupted", "Data exists but can't be read");
+    }
+  } else {
+    html += row("missing", "❌", "History — Not Found",
+      "No snapshots yet. Use \"Log Snapshot\" in the app to start tracking.");
+  }
+
+  /* 3. Total Contributed */
+  const contribRaw = ls(KEYS.contrib) || ls(LEGACY_KEYS.contrib2);
+  if (contribRaw) {
+    const val = Number(contribRaw.replace(/"/g, ""));
+    html += row("found", "✅", "Total Contributed — Found",
+      "$" + val.toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2}));
+  } else {
+    html += row("missing", "❌", "Total Contributed — Not Found",
+      "No contribution amount saved. Log a snapshot to set this.");
+  }
+
+  /* 4. Settings */
+  const settRaw = ls(KEYS.settings);
+  if (settRaw) {
+    try {
+      const s = JSON.parse(settRaw);
+      const keys = Object.keys(s);
+      html += row("found", "✅", "Settings — Found", keys.length + " setting" + (keys.length !== 1 ? "s" : "") + " saved");
+    } catch {
+      html += row("missing", "⚠️", "Settings — Corrupted", "Data exists but can't be read");
+    }
+  } else {
+    html += row("found", "ℹ️", "Settings — Using Defaults", "No custom settings. The app uses its built-in defaults.");
+  }
+
+  /* 5. Price Cache */
+  const priceRaw = ls(KEYS.prices) || ls(LEGACY_KEYS.prices2);
+  if (priceRaw) {
+    try {
+      const pc = JSON.parse(priceRaw);
+      const age = pc.ts ? Math.round((Date.now() - pc.ts) / 60000) : null;
+      let detail = "Cached prices available";
+      if (age != null) detail += " — " + (age < 60 ? age + " minutes old" : Math.round(age/60) + " hours old");
+      html += row("found", "✅", "Price Cache — Found", detail);
+    } catch {
+      html += row("found", "ℹ️", "Price Cache — Exists", "Saved but couldn't read details");
+    }
+  } else {
+    html += row("found", "ℹ️", "Price Cache — Empty", "Prices will be fetched fresh when you open the app.");
+  }
+
+  /* 6. Theme */
+  const themeRaw = ls(KEYS.theme);
+  if (themeRaw) {
+    html += row("found", "✅", "Theme — " + esc(themeRaw.replace(/"/g, "")), "Your display preference is saved");
+  }
+
+  container.innerHTML = html;
+}
+
+function row(cls, icon, title, detail) {
+  return '<div class="check-row">' +
+    '<span class="icon">' + icon + '</span>' +
+    '<div class="label"><strong class="' + cls + '">' + title + '</strong>' +
+    (detail ? '<div class="detail">' + detail + '</div>' : '') +
+    '</div></div>';
+}
+
+function ls(key) {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+
+function esc(s) {
+  const d = document.createElement("div");
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+/* ── Backup ── */
+function backupData() {
+  const statusEl = document.getElementById("backupStatus");
+  try {
+    const data = {};
+    let hasAny = false;
+
+    /* Gather all known keys */
+    const allKeys = { ...KEYS, ...LEGACY_KEYS };
+    for (const [name, key] of Object.entries(allKeys)) {
+      const val = ls(key);
+      if (val != null) {
+        hasAny = true;
+        try { data[key] = JSON.parse(val); } catch { data[key] = val; }
+      }
+    }
+
+    if (!hasAny) {
+      statusEl.className = "status-msg error";
+      statusEl.textContent = "Nothing to back up — no Retention OS data found in this browser.";
+      return;
+    }
+
+    /* Also build a friendly export format compatible with app import */
+    const friendly = {};
+    if (data[KEYS.positions]) friendly.positions = data[KEYS.positions];
+    if (data[KEYS.history])   friendly.history   = data[KEYS.history];
+    const cVal = data[KEYS.contrib] ?? data[LEGACY_KEYS.contrib2];
+    if (cVal != null) friendly.totalContributed = Number(cVal) || 0;
+    if (data[KEYS.settings])  friendly.settings  = data[KEYS.settings];
+
+    const blob = new Blob(
+      [JSON.stringify({ _meta: { tool: "Retention OS Data Checker", date: new Date().toISOString(), version: "1.0" }, appImport: friendly, rawKeys: data }, null, 2)],
+      { type: "application/json" }
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const d = new Date();
+    a.download = "RetentionOS_Backup_" + d.getFullYear() + "-" +
+      String(d.getMonth()+1).padStart(2,"0") + "-" +
+      String(d.getDate()).padStart(2,"0") + ".json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    statusEl.className = "status-msg success";
+    statusEl.textContent = "✅ Backup downloaded! Keep this file somewhere safe.";
+  } catch (e) {
+    statusEl.className = "status-msg error";
+    statusEl.textContent = "Something went wrong: " + e.message;
+  }
+}
+
+/* ── Restore ── */
+const dropZone = document.getElementById("dropZone");
+const fileInput = document.getElementById("fileInput");
+
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("over"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("over"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropZone.classList.remove("over");
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener("change", () => {
+  if (fileInput.files.length) handleFile(fileInput.files[0]);
+});
+
+function handleFile(file) {
+  const statusEl = document.getElementById("restoreStatus");
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      applyRestore(reader.result, statusEl);
+    } catch (e) {
+      statusEl.className = "status-msg error";
+      statusEl.textContent = "Could not read this file: " + e.message;
+    }
+  };
+  reader.onerror = () => {
+    statusEl.className = "status-msg error";
+    statusEl.textContent = "Could not open this file. Make sure it's the .json backup.";
+  };
+  reader.readAsText(file);
+}
+
+function pasteRestore() {
+  const text = prompt("Paste your backup JSON text here:");
+  if (!text) return;
+  const statusEl = document.getElementById("restoreStatus");
+  try {
+    applyRestore(text, statusEl);
+  } catch (e) {
+    statusEl.className = "status-msg error";
+    statusEl.textContent = "Could not read pasted text: " + e.message;
+  }
+}
+
+function applyRestore(text, statusEl) {
+  const parsed = JSON.parse(text);
+
+  /* Support our backup format */
+  if (parsed.rawKeys && typeof parsed.rawKeys === "object") {
+    if (!confirm("This will replace your current data with the backup. Continue?")) {
+      statusEl.className = "status-msg info";
+      statusEl.textContent = "Restore cancelled.";
+      return;
+    }
+    for (const [key, val] of Object.entries(parsed.rawKeys)) {
+      localStorage.setItem(key, typeof val === "string" ? val : JSON.stringify(val));
+    }
+    statusEl.className = "status-msg success";
+    statusEl.textContent = "✅ Data restored! Now go back to Retention OS and refresh the page.";
+    runCheck();
+    return;
+  }
+
+  /* Support direct app export format (positions, history, totalContributed, settings) */
+  if (parsed.positions || parsed.history || parsed.totalContributed != null) {
+    if (!confirm("This will replace your current data with the backup. Continue?")) {
+      statusEl.className = "status-msg info";
+      statusEl.textContent = "Restore cancelled.";
+      return;
+    }
+    if (parsed.positions)       localStorage.setItem(KEYS.positions, JSON.stringify(parsed.positions));
+    if (parsed.history)         localStorage.setItem(KEYS.history, JSON.stringify(parsed.history));
+    if (parsed.totalContributed != null) localStorage.setItem(KEYS.contrib, JSON.stringify(Number(parsed.totalContributed) || 0));
+    if (parsed.settings)        localStorage.setItem(KEYS.settings, JSON.stringify(parsed.settings));
+    statusEl.className = "status-msg success";
+    statusEl.textContent = "✅ Data restored! Now go back to Retention OS and refresh the page.";
+    runCheck();
+    return;
+  }
+
+  statusEl.className = "status-msg error";
+  statusEl.textContent = "This doesn't look like a Retention OS backup file. Make sure you selected the right file.";
+}
+</script>
+
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"f0f03d0605bf45f1a3b17cf7d5e6861f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
