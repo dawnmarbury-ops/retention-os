@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RetentionOS Positions Snapshot",
+  "type": "object",
+  "required": [
+    "run_id",
+    "generated_at",
+    "schema_version",
+    "total_nav_usd",
+    "positions",
+    "metadata"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generated_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "total_nav_usd": {
+      "type": "number"
+    },
+    "positions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "symbol",
+          "qty",
+          "decimals",
+          "contract_address",
+          "price_usd",
+          "nav_usd",
+          "weight",
+          "source",
+          "source_priority",
+          "wallet_address"
+        ],
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "minLength": 1
+          },
+          "qty": {
+            "type": "number"
+          },
+          "decimals": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "contract_address": {
+            "type": "string",
+            "minLength": 1
+          },
+          "price_usd": {
+            "type": "number"
+          },
+          "nav_usd": {
+            "type": "number"
+          },
+          "weight": {
+            "type": "number"
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_priority": {
+            "type": "string",
+            "enum": ["onchain"]
+          },
+          "wallet_address": {
+            "type": "string",
+            "pattern": "^0x[a-fA-F0-9]{40}$"
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object"
+    }
+  }
+}
