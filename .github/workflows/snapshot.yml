@@ -3,16 +3,21 @@ name: Generate Snapshot JSON
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 2 * * *'   # daily at 02:00 UTC (change as needed)
+    - cron: '0 2 * * *'
 
 permissions:
-  contents: write  # required to push commits
+  contents: write
 
 jobs:
   generate:
     runs-on: ubuntu-latest
+
+    env:
+      # default to dry-run; set a repo secret DRY_RUN to "false" to run for real
+      DRY_RUN: "true"
+
     steps:
-      - name: Checkout repository (full)
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -23,8 +28,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Show repo files (top-level)
-        run: ls -la | sed -n '1,200p'
+      - name: Show top-level repo (debug)
+        run: |
+          echo "PWD: $(pwd)"
+          ls -la
 
       - name: Install Python deps (best-effort)
         run: |
@@ -35,57 +42,58 @@ jobs:
             echo "requirements.txt not found — continuing"
           fi
 
-      - name: Prepare env (use secrets or default to DRY_RUN)
-        run: |
-          # DRY_RUN secret optional: set to "false" in repo secrets to run for real
-          DRY_RUN="${{ secrets.DRY_RUN }}"
-          : ${DRY_RUN:=true}
-          echo "DRY_RUN=$DRY_RUN" > .env.action
-          echo "ALCHEMY_ETH_KEY is set to secret? ${ALCHEMY_ETH_KEY:+yes}" || true
-        env:
-          ALCHEMY_ETH_KEY: ${{ secrets.ALCHEMY_ETH_KEY }}
-
-      - name: Run snapshotter (with debug logging)
+      - name: Prepare env preview
         env:
           ALCHEMY_ETH_KEY: ${{ secrets.ALCHEMY_ETH_KEY }}
           COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
-          DRY_RUN: ${{ secrets.DRY_RUN }}
         run: |
-          # ensure out/snapshots dir exists
+          echo "Using DRY_RUN=${DRY_RUN}"
+          echo "Secrets: (ALCHEMY_ETH_KEY set?)"
+          if [ -z "${ALCHEMY_ETH_KEY}" ]; then
+            echo "ALCHEMY_ETH_KEY: NOT SET"
+          else
+            echo "ALCHEMY_ETH_KEY: SET"
+          fi
+          # do not print secrets values
+
+      - name: Run snapshotter (capture stdout/stderr)
+        env:
+          ALCHEMY_ETH_KEY: ${{ secrets.ALCHEMY_ETH_KEY }}
+          COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
+          DRY_RUN: ${{ env.DRY_RUN }}
+        run: |
+          set -o pipefail || true
           mkdir -p out/snapshots
-          # set default DRY_RUN if not provided
-          : ${DRY_RUN:=true}
-          echo "Running snapshotter with DRY_RUN=$DRY_RUN"
-          echo "Environment preview (non-secrets):"
-          env | grep -v -E "ALCHEMY_ETH_KEY|COINGECKO_API_KEY" | sed -n '1,200p'
-          # run snapshotter and capture output
+          echo "Running scripts/snapshotter.py with DRY_RUN=${DRY_RUN}"
           python3 scripts/snapshotter.py 2>&1 | tee snapshotter_run.log || true
-          echo "---- snapshotter log tail ----"
+          echo "---- snapshotter run log (last 200 lines) ----"
           tail -n 200 snapshotter_run.log || true
 
-      - name: Debug - show snapshots directory and file info
+      - name: Debug snapshots dir and file
         run: |
-          echo "Listing out/snapshots:"
+          echo "Listing out/snapshots"
           ls -lah out/snapshots || true
           if [ -f out/snapshots/positions.latest.json ]; then
-            echo "File size (bytes):"
-            wc -c out/snapshots/positions.latest.json || true
-            echo "First 200 lines:"
+            echo "positions.latest.json exists"
+            echo "Size (bytes): $(wc -c < out/snapshots/positions.latest.json || echo 0)"
+            echo "Head (first 200 lines):"
             head -n 200 out/snapshots/positions.latest.json || true
           else
             echo "positions.latest.json not found"
           fi
 
-      - name: Fallback test JSON if DRY_RUN=true and file missing/small
-        if: ${{ secrets.DRY_RUN == 'true' || env.DRY_RUN == 'true' }}
+      - name: Create fallback JSON if file missing or too small (dry-run fallback)
+        env:
+          DRY_RUN: ${{ env.DRY_RUN }}
         run: |
           SIZE=0
           if [ -f out/snapshots/positions.latest.json ]; then
             SIZE=$(wc -c < out/snapshots/positions.latest.json || echo 0)
           fi
-          echo "existing size=$SIZE"
+          echo "Existing size = $SIZE"
           if [ "$SIZE" -lt 200 ]; then
             echo "Creating fallback test JSON (dry run)"
+            mkdir -p out/snapshots
             python3 - <<'PY' > out/snapshots/positions.latest.json
 import json,datetime
 test = {
@@ -100,21 +108,20 @@ test = {
 print(json.dumps(test, indent=2))
 PY
           fi
-          echo "After fallback, listing:"
-          ls -lah out/snapshots
+          echo "After fallback:"
+          ls -lah out/snapshots || true
           wc -c out/snapshots/positions.latest.json || true
           head -n 200 out/snapshots/positions.latest.json || true
 
-      - name: Commit and push snapshot if valid
+      - name: Commit and push snapshot if file valid
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ ! -f out/snapshots/positions.latest.json ]; then
-            echo "No file to commit" && exit 1
+            echo "No positions.latest.json to commit" && exit 1
           fi
           SIZE=$(wc -c < out/snapshots/positions.latest.json || echo 0)
           echo "positions.latest.json size=$SIZE"
-          # Only commit if file looks real (>=200 bytes) to avoid placeholder commits
           if [ "$SIZE" -ge 200 ]; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -122,12 +129,10 @@ PY
             if git diff --staged --quiet; then
               echo "No changes to commit"
             else
-              git commit -m "Auto: update positions.latest.json — $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-              git push origin HEAD:${{ github.ref }} || git push
+              git commit -m "Auto-update positions.latest.json — $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+              git push origin HEAD:${{ github.ref_name }} || git push
             fi
           else
-            echo "File exists but is too small (<200 bytes). Not committing. Failing to show debug info."
-            ls -lah out/snapshots || true
-            head -n 200 out/snapshots/positions.latest.json || true
+            echo "File too small (<200 bytes). Not committing."
             exit 1
           fi
