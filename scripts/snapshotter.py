@@ -93,6 +93,12 @@ def verify_ethereum_erc20_symbols(tokens: list[dict], alchemy_key: str) -> None:
             continue
         if token["contract_address"].lower() == "native":
             continue
+        # Print the (symbol, chain) context BEFORE the call. If verify_symbol
+        # dies, this line is the last thing in stdout — triage-friendly.
+        print(
+            f"[verify] checking {token['symbol']} @ {token['chain']} "
+            f"({token['contract_address']}), track_balance={token['track_balance']}"
+        )
         eth_connector.verify_symbol(url, token["contract_address"].lower(), token["symbol"])
         print(f"[verify] Confirmed on-chain symbol for {token['symbol']} ({token['contract_address']})")
 
