@@ -104,14 +104,13 @@ def fetch_token_balances(url: str, wallet: str, contracts: list[str]) -> dict[st
 
 
 def fetch_positions(addresses: list[str], tokens: list[dict], alchemy_key: str) -> list[dict]:
-    """Return raw positions (qty, no price) for tokens on ethereum-mainnet."""
+    """Return raw positions (qty, no price) for balance-tracked tokens on ethereum-mainnet.
+
+    Symbol verification is performed by the orchestrator before dispatch — it
+    covers both balance-tracked and price-only ERC-20 entries (see v2.1)."""
     url = ALCHEMY_URL_TEMPLATE.format(key=alchemy_key)
     erc20_tokens = [t for t in tokens if t["contract_address"].lower() != "native"]
     erc20_contracts = [t["contract_address"].lower() for t in erc20_tokens]
-
-    for token in erc20_tokens:
-        verify_symbol(url, token["contract_address"].lower(), token["symbol"])
-        print(f"[ethereum] Verified on-chain symbol for {token['symbol']} ({token['contract_address']})")
 
     raw_positions: list[dict] = []
     for wallet in addresses:

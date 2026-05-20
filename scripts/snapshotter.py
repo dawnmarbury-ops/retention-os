@@ -1,12 +1,21 @@
 #!/usr/bin/env python3
 """
-Snapshotter v2 — fail-loud multi-chain NAV snapshot for retention-os.
+Snapshotter v2.1 — fail-loud multi-chain NAV snapshot with price-only Legacy.
 
 Reads wallet addresses from per-chain env vars (EVM_ADDRESSES, BTC_ADDRESSES,
-SOL_ADDRESSES) and the token allowlist from tokens.json. Groups tokens by
-chain and dispatches each chain to its connector module. Prices held positions
-via CoinGecko (with 24h change), runs an internal sanity check against
-positions.schema.json, and writes via atomic rename to out/snapshots/.
+SOL_ADDRESSES) and the token allowlist from tokens.json. Each token carries a
+track_balance flag:
+
+  - track_balance: true   -> balance-fetched via the chain's connector and
+                             priced via CoinGecko (source_priority="onchain")
+  - track_balance: false  -> CoinGecko price only, no balance fetch, emitted
+                             with null qty/wallet/nav/weight and
+                             source_priority="price_only"
+
+All ERC-20 contracts on ethereum-mainnet (both balance-tracked and price-only)
+are symbol-verified on-chain before any snapshot is written. WELL is on Base
+and is intentionally NOT verified — its contract_address is informational
+metadata only, since no Base connector is in scope this sprint.
 
 Environment:
   ALCHEMY_ETH_KEY    required — Alchemy app key (Solana Mainnet must be enabled)
@@ -38,7 +47,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 TOKENS_PATH = REPO_ROOT / "tokens.json"
 SCHEMA_PATH = REPO_ROOT / "positions.schema.json"
 OUT_DIR = REPO_ROOT / "out" / "snapshots"
-SCHEMA_VERSION = "2.0.0"
+SCHEMA_VERSION = "2.1.0"
 COINGECKO_PRICE_URL = "https://api.coingecko.com/api/v3/simple/price"
 
 CHAIN_ETHEREUM = "ethereum-mainnet"
@@ -64,10 +73,28 @@ def load_tokens() -> list[dict]:
     if not isinstance(tokens, list) or not tokens:
         die("tokens.json must contain a non-empty 'tokens' array")
     for i, token in enumerate(tokens):
-        for field in ("symbol", "contract_address", "decimals", "coingecko_id", "chain"):
+        for field in ("symbol", "contract_address", "decimals", "coingecko_id", "chain", "track_balance"):
             if field not in token:
                 die(f"tokens.json entry {i} missing required field: {field}")
+        if not isinstance(token["track_balance"], bool):
+            die(f"tokens.json entry {i}: track_balance must be boolean (got {token['track_balance']!r})")
     return tokens
+
+
+def verify_ethereum_erc20_symbols(tokens: list[dict], alchemy_key: str) -> None:
+    """For every Ethereum-mainnet ERC-20 token in tokens.json (track_balance true
+    OR false), verify the on-chain symbol matches the declared symbol.
+
+    WELL is on chain=base-mainnet and is naturally excluded by the chain filter,
+    so no special-case carve-out is needed."""
+    url = eth_connector.ALCHEMY_URL_TEMPLATE.format(key=alchemy_key)
+    for token in tokens:
+        if token["chain"] != CHAIN_ETHEREUM:
+            continue
+        if token["contract_address"].lower() == "native":
+            continue
+        eth_connector.verify_symbol(url, token["contract_address"].lower(), token["symbol"])
+        print(f"[verify] Confirmed on-chain symbol for {token['symbol']} ({token['contract_address']})")
 
 
 def fetch_prices(coingecko_ids: Iterable[str], api_key: str) -> dict[str, dict]:
@@ -90,9 +117,26 @@ def fetch_prices(coingecko_ids: Iterable[str], api_key: str) -> dict[str, dict]:
     return {cg_id: info for cg_id, info in data.items() if isinstance(info, dict)}
 
 
+def _require_price(info: dict | None, label: str) -> tuple[float, float]:
+    """Returns (price_usd, price_change_24h_percent), dies if either is bad.
+
+    The 24h change requirement applies symmetrically to balance-tracked and
+    price-only tokens — the dashboard's Vulture Rule and Legacy tiles both
+    depend on this field; a silent null would cascade downstream."""
+    if not info:
+        die(f"missing CoinGecko price entry for {label}")
+    assert info is not None
+    usd = info.get("usd")
+    if not isinstance(usd, (int, float)) or usd <= 0:
+        die(f"missing/zero CoinGecko price for {label} (got {usd!r})")
+    change = info.get("usd_24h_change")
+    if not isinstance(change, (int, float)):
+        die(f"missing/null 24h price change for {label} (got {change!r})")
+    return float(usd), float(change)
+
+
 def _internal_sanity(snapshot: dict) -> str:
-    """Pre-write sanity check: schema shape + non-empty positions.
-    Returns empty string on pass, error message on fail."""
+    """Pre-write sanity check: schema shape + non-empty positions."""
     try:
         schema = json.loads(SCHEMA_PATH.read_text())
     except (OSError, json.JSONDecodeError) as exc:
@@ -109,11 +153,6 @@ def _internal_sanity(snapshot: dict) -> str:
 
 
 def _write_atomic(blob: str, now: datetime) -> None:
-    """Write to .tmp, atomic rename to latest, then copy to archive.
-
-    If anything fails before rename: clean up .tmp, fail loud (no on-disk state).
-    If archive copy fails AFTER rename succeeds: log warning, exit 0
-    (latest is correct, archive can be regenerated)."""
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     latest = OUT_DIR / "positions.latest.json"
     tmp = OUT_DIR / "positions.latest.json.tmp"
@@ -161,17 +200,26 @@ def main() -> int:
     dry_run = os.environ.get("DRY_RUN", "").strip().lower() in ("1", "true", "yes")
 
     tokens = load_tokens()
+    balance_tokens = [t for t in tokens if t["track_balance"]]
+    price_only_tokens = [t for t in tokens if not t["track_balance"]]
+
+    print(
+        f"DRY_RUN={dry_run} | Tokens: {len(tokens)} "
+        f"(onchain={len(balance_tokens)}, price_only={len(price_only_tokens)})"
+    )
+
+    verify_ethereum_erc20_symbols(tokens, alchemy_key)
+
     by_chain: dict[str, list[dict]] = {}
-    for t in tokens:
+    for t in balance_tokens:
         by_chain.setdefault(t["chain"], []).append(t)
 
     evm_addrs = eth_connector.parse_addresses(evm_raw)
     btc_addrs = btc_connector.parse_addresses(btc_raw)
     sol_addrs = sol_connector.parse_addresses(sol_raw)
-
     print(
-        f"DRY_RUN={dry_run} | Chains: {sorted(by_chain.keys())} | "
-        f"Wallets: EVM={len(evm_addrs)} BTC={len(btc_addrs)} SOL={len(sol_addrs)}"
+        f"Wallets: EVM={len(evm_addrs)} BTC={len(btc_addrs)} SOL={len(sol_addrs)} | "
+        f"Chains dispatched: {sorted(by_chain.keys())}"
     )
 
     raw_positions: list[dict] = []
@@ -190,37 +238,25 @@ def main() -> int:
 
     held = [rp for rp in raw_positions if rp["qty"] > 0]
     if not held:
-        die("no non-zero positions found across all chains")
+        die("no non-zero balance-tracked positions found across all chains")
 
-    needed_ids = sorted({rp["coingecko_id"] for rp in held})
+    needed_ids = sorted({t["coingecko_id"] for t in tokens})
     price_info = fetch_prices(needed_ids, coingecko_key)
+
+    onchain_priced: list[tuple[dict, float, float]] = []
     for rp in held:
-        cg = rp["coingecko_id"]
-        info = price_info.get(cg)
-        if not info:
-            die(
-                f"missing CoinGecko price entry for held token {rp['symbol']} "
-                f"(coingecko id: {cg}, wallet: {rp['wallet_address']})"
-            )
-        usd = info.get("usd")
-        if not isinstance(usd, (int, float)) or usd <= 0:
-            die(
-                f"missing/zero price for held token {rp['symbol']} "
-                f"(coingecko id: {cg}, wallet: {rp['wallet_address']})"
-            )
-        change = info.get("usd_24h_change")
-        if not isinstance(change, (int, float)):
-            # Vulture Rule depends on this field; silent miss would cascade.
-            die(
-                f"missing/null 24h price change for held token {rp['symbol']} "
-                f"(coingecko id: {cg}, wallet: {rp['wallet_address']})"
-            )
+        label = f"held token {rp['symbol']}@{rp['chain']} (coingecko {rp['coingecko_id']}, wallet {rp['wallet_address']})"
+        price, change = _require_price(price_info.get(rp["coingecko_id"]), label)
+        onchain_priced.append((rp, price, change))
+
+    price_only_priced: list[tuple[dict, float, float]] = []
+    for t in price_only_tokens:
+        label = f"price-only token {t['symbol']}@{t['chain']} (coingecko {t['coingecko_id']})"
+        price, change = _require_price(price_info.get(t["coingecko_id"]), label)
+        price_only_priced.append((t, price, change))
 
     positions: list[dict] = []
-    for rp in held:
-        info = price_info[rp["coingecko_id"]]
-        price = float(info["usd"])
-        change = float(info["usd_24h_change"])
+    for rp, price, change in onchain_priced:
         nav = rp["qty"] * price
         positions.append({
             "symbol": rp["symbol"],
@@ -237,11 +273,29 @@ def main() -> int:
             "wallet_address": rp["wallet_address"],
         })
 
-    total_nav = sum(p["nav_usd"] for p in positions)
+    for t, price, change in price_only_priced:
+        contract = t["contract_address"].lower() if t["contract_address"] != "native" else "native"
+        positions.append({
+            "symbol": t["symbol"],
+            "chain": t["chain"],
+            "qty": None,
+            "decimals": t["decimals"],
+            "contract_address": contract,
+            "price_usd": price,
+            "price_change_24h_percent": change,
+            "nav_usd": None,
+            "weight": None,
+            "source": "coingecko",
+            "source_priority": "price_only",
+            "wallet_address": None,
+        })
+
+    total_nav = sum(p["nav_usd"] for p in positions if p["nav_usd"] is not None)
     if total_nav <= 0:
         die(f"total_nav_usd <= 0 (got {total_nav})")
     for p in positions:
-        p["weight"] = p["nav_usd"] / total_nav
+        if p["source_priority"] == "onchain":
+            p["weight"] = p["nav_usd"] / total_nav
 
     now = datetime.now(timezone.utc)
     snapshot = {
@@ -257,9 +311,10 @@ def main() -> int:
                 CHAIN_SOLANA: sol_addrs,
             },
             "tokens_tracked": [
-                {"symbol": t["symbol"], "chain": t["chain"]} for t in tokens
+                {"symbol": t["symbol"], "chain": t["chain"], "track_balance": t["track_balance"]}
+                for t in tokens
             ],
-            "chains": sorted(by_chain.keys()),
+            "chains_onchain": sorted(by_chain.keys()),
             "data_sources": ["alchemy", "blockstream", "coingecko"],
             "dry_run": dry_run,
         },
@@ -274,16 +329,20 @@ def main() -> int:
     if dry_run:
         print("[DRY_RUN] would have written:")
         print(blob)
+        onchain_count = sum(1 for p in positions if p["source_priority"] == "onchain")
+        price_only_count = sum(1 for p in positions if p["source_priority"] == "price_only")
         print(
             f"[DRY_RUN] total_nav_usd={total_nav:.2f} positions={len(positions)} "
-            f"chains={len(by_chain)}"
+            f"(onchain={onchain_count}, price_only={price_only_count})"
         )
         return 0
 
     _write_atomic(blob, now)
+    onchain_count = sum(1 for p in positions if p["source_priority"] == "onchain")
+    price_only_count = sum(1 for p in positions if p["source_priority"] == "price_only")
     print(
         f"total_nav_usd={total_nav:.2f} positions={len(positions)} "
-        f"chains={len(by_chain)}"
+        f"(onchain={onchain_count}, price_only={price_only_count})"
     )
     return 0
 

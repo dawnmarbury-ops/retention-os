@@ -54,7 +54,7 @@
             "minLength": 1
           },
           "qty": {
-            "type": "number"
+            "type": ["number", "null"]
           },
           "decimals": {
             "type": "integer",
@@ -71,10 +71,10 @@
             "type": "number"
           },
           "nav_usd": {
-            "type": "number"
+            "type": ["number", "null"]
           },
           "weight": {
-            "type": "number"
+            "type": ["number", "null"]
           },
           "source": {
             "type": "string",
@@ -82,10 +82,10 @@
           },
           "source_priority": {
             "type": "string",
-            "enum": ["onchain"]
+            "enum": ["onchain", "price_only"]
           },
           "wallet_address": {
-            "type": "string",
+            "type": ["string", "null"],
             "minLength": 1
           }
         }
