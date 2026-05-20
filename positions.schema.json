@@ -32,10 +32,12 @@
         "type": "object",
         "required": [
           "symbol",
+          "chain",
           "qty",
           "decimals",
           "contract_address",
           "price_usd",
+          "price_change_24h_percent",
           "nav_usd",
           "weight",
           "source",
@@ -44,6 +46,10 @@
         ],
         "properties": {
           "symbol": {
+            "type": "string",
+            "minLength": 1
+          },
+          "chain": {
             "type": "string",
             "minLength": 1
           },
@@ -59,6 +65,9 @@
             "minLength": 1
           },
           "price_usd": {
+            "type": "number"
+          },
+          "price_change_24h_percent": {
             "type": "number"
           },
           "nav_usd": {
@@ -77,7 +86,7 @@
           },
           "wallet_address": {
             "type": "string",
-            "pattern": "^0x[a-fA-F0-9]{40}$"
+            "minLength": 1
           }
         }
       }
