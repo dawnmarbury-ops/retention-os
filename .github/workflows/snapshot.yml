@@ -37,6 +37,8 @@ jobs:
         env:
           ALCHEMY_ETH_KEY: ${{ secrets.ALCHEMY_ETH_KEY }}
           EVM_ADDRESSES: ${{ secrets.EVM_ADDRESSES }}
+          BTC_ADDRESSES: ${{ secrets.BTC_ADDRESSES }}
+          SOL_ADDRESSES: ${{ secrets.SOL_ADDRESSES }}
           COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
           DRY_RUN: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && 'true' || '' }}
         run: python scripts/snapshotter.py
